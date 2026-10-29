@@ -66,9 +66,29 @@
 fees from capture responses are recorded per settlement and shown in the ledger. The metrics
 endpoint compares `sum(fee(price_i))` (per-call billing) with `sum(fee(settlement_j))` (the tab).
 
-## Sandbox notes (fill in from `.spike/log.jsonl` after Gate G1)
+## Sandbox notes (Gate G1 passed 2026-10-29)
 
-- Setup-token request/response:
-- Payment-token (vault_id) response:
-- Order + capture response, including `seller_receivable_breakdown.paypal_fee`:
-- Observed token lifetime and any scopes required:
+What it took to get a PayPal wallet vaulted and charged merchant-initiated in the sandbox:
+
+- **Account country matters.** The auto-generated India (IN) sandbox business account never
+  received Vault v3 scopes even with "Save payment methods" ticked; the token carried only the
+  legacy `v1/vault/credit-card` scope and `POST /v3/vault/setup-tokens` returned
+  `403 NOT_AUTHORIZED`. A new **US** sandbox business account plus a new app attached to it
+  fixed it immediately: the token gained `services/vault/payment-tokens/readwrite`.
+- **The buyer must be a different sandbox account from the seller.** Approving the setup token
+  while logged in as the business account shows "You are logging into the account of the seller".
+  A US sandbox *personal* account approved it; the consent screen is titled "One-time setup,
+  faster checkouts" and lists the buyer's funding sources.
+- **Flow that worked:** `POST /v3/vault/setup-tokens` (`usage_type: MERCHANT`, `customer_type:
+  CONSUMER`, `usage_pattern: IMMEDIATE`, `payment_method_preference: IMMEDIATE_PAYMENT_REQUIRED`)
+  → buyer opens the `approve` link → `POST /v3/vault/payment-tokens` with
+  `{token: {id, type: "SETUP_TOKEN"}}` → `vault_id` (17 chars, e.g. `8aj93029j0199535u`).
+- **Captures:** `POST /v2/checkout/orders` with `payment_source.paypal.vault_id` and
+  `stored_credential {MERCHANT, UNSCHEDULED, SUBSEQUENT}` returned `status: COMPLETED` directly;
+  no separate capture call was needed. Two captures from the same vault id succeeded with the
+  buyer absent: `9NU79426JT338232M` ($1.00) and `4H564989KF0464627` ($2.50).
+- **Observed fees** in `seller_receivable_breakdown.paypal_fee`: $0.52 on $1.00 and $0.58 on
+  $2.50, which match `0.49 + 3.49%` to the cent. The treasurer's defaults stand.
+- **Token lifetime:** client-credentials tokens report `expires_in` of about 32,000 s (~9 h).
+  The gateway caches the token and refreshes a minute before expiry.
+- Raw request/response bodies for every step are in `.spike/log.jsonl` (git-ignored).

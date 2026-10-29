@@ -1,4 +1,9 @@
-import "dotenv/config";
+import { config as loadEnv } from "dotenv";
+import { fileURLToPath } from "node:url";
+// Load .env from the current directory first, then from the repo root, so every app works
+// whether started from the root, its own folder, or compiled dist/.
+loadEnv();
+loadEnv({ path: fileURLToPath(new URL("../../../.env", import.meta.url)) });
 import type { JWK } from "jose";
 import { createApp } from "./app.js";
 
