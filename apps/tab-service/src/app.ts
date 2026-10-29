@@ -2,7 +2,17 @@ import express, { type Request, type Response, type NextFunction } from "express
 import { randomBytes, randomUUID } from "node:crypto";
 import { exportJWK, generateKeyPair, type JWK } from "jose";
 import { Policy, Quote, evaluate, signReceipt, type TabLine } from "@agent-tab/shared";
-import { MemoryStore, type Tab } from "./store.js";
+import { MemoryStore, type Settlement, type Tab } from "./store.js";
+import { MockGateway, type PaymentGateway } from "./gateway.js";
+import { DEFAULT_FEES, decide, feeComparison, type Advisor, type FeeModel } from "./treasurer.js";
+
+export type AppOptions = {
+  gateway?: PaymentGateway;
+  advisor?: Advisor;
+  fees?: FeeModel;
+  /** Max time an open balance may accrue before a forced settlement. */
+  exposureWindowMs?: number;
+};
 
 export type Keys = { privateJwk: JWK; publicJwk: JWK };
 
@@ -18,7 +28,10 @@ export async function loadOrCreateKeys(): Promise<Keys> {
   return keys;
 }
 
-export function createApp(keys: Keys, store = new MemoryStore()) {
+export function createApp(keys: Keys, store = new MemoryStore(), options: AppOptions = {}) {
+  const gateway = options.gateway ?? new MockGateway();
+  const fees = options.fees ?? DEFAULT_FEES;
+  const exposureWindowMs = options.exposureWindowMs ?? 30 * 60_000;
   const app = express();
   app.use(express.json({ limit: "64kb" }));
 
@@ -54,6 +67,8 @@ export function createApp(keys: Keys, store = new MemoryStore()) {
       blocked: [],
       settlements: [],
       created_at: new Date().toISOString(),
+      session_ended: false,
+      delinquent: false,
       vault_id: typeof req.body?.vault_id === "string" ? req.body.vault_id : undefined,
     };
     store.tabs.set(tab.tab_id, tab);
@@ -74,6 +89,8 @@ export function createApp(keys: Keys, store = new MemoryStore()) {
       blocked: tab.blocked,
       settlements: tab.settlements,
       vault_linked: Boolean(tab.vault_id),
+      session_ended: tab.session_ended,
+      delinquent: tab.delinquent,
     });
   });
 
@@ -84,6 +101,13 @@ export function createApp(keys: Keys, store = new MemoryStore()) {
     if (!q.success) { res.status(400).json({ error: "invalid_quote", issues: q.error.issues }); return; }
     const quote = q.data;
     const now = new Date();
+    if (tab.delinquent || tab.session_ended) {
+      const reason = tab.delinquent ? "tab_delinquent" : "session_ended";
+      tab.blocked.push({ at: now.toISOString(), quote, reason });
+      emit("line.blocked", { tab_id: tab.tab_id, quote, reason });
+      res.status(403).json({ error: "denied", reason });
+      return;
+    }
     const decision = evaluate(quote, tab.policy, {
       spent_session: store.spentSession(tab),
       spent_today: store.spentToday(tab, now),
@@ -129,8 +153,89 @@ export function createApp(keys: Keys, store = new MemoryStore()) {
       keys.privateJwk,
     );
     emit("line.added", { tab_id: tab.tab_id, line, outstanding: store.outstanding(tab) });
+    // The treasurer looks at the tab after every line. Settlement is awaited so the
+    // ledger is consistent by the time the agent gets its receipt.
+    await runTreasurer(tab);
     return { ...line, receipt };
   }
+
+  async function runTreasurer(tab: Tab): Promise<Settlement | undefined> {
+    const now = new Date();
+    const decision = await decide(
+      {
+        outstanding: store.outstanding(tab),
+        settlement_threshold: tab.policy.settlement_threshold,
+        session_ended: tab.session_ended,
+        open_since: new Date(tab.last_settlement_at ?? tab.created_at),
+        now,
+        exposure_window_ms: exposureWindowMs,
+        calls_last_minute: store.callsLastMinute(tab.tab_id, now.getTime()),
+      },
+      fees,
+      options.advisor,
+    );
+    emit("treasurer.decision", { tab_id: tab.tab_id, ...decision });
+    if (!decision.settle) return undefined;
+    return settle(tab, decision.reason, decision.rationale, decision.llm_adjusted);
+  }
+
+  async function settle(tab: Tab, reason: string, rationale: string, llmAdjusted: boolean): Promise<Settlement> {
+    const amount = store.outstanding(tab);
+    const n = tab.settlements.length + 1;
+    const base = { settlement_id: `stl_${randomUUID()}`, at: new Date().toISOString(), amount, lines: tab.lines.length, reason, rationale, llm_adjusted: llmAdjusted };
+    if (!tab.vault_id && gateway.name !== "mock") {
+      const failed: Settlement = { ...base, status: "failed", reason: "no_vault_linked" };
+      tab.settlements.push(failed);
+      tab.delinquent = true;
+      emit("settlement.failed", failed);
+      return failed;
+    }
+    const result = await gateway.capture({
+      vault_id: tab.vault_id ?? "mock-vault",
+      amount,
+      reference: `${tab.tab_id}:${n}`,
+      description: `Agent Tab settlement ${n} (${tab.lines.length} metered calls)`,
+    });
+    let settlement: Settlement;
+    if (result.ok) {
+      settlement = { ...base, status: "completed", capture_id: result.capture_id, order_id: result.order_id, paypal_fee: result.paypal_fee };
+      tab.last_settlement_at = settlement.at;
+    } else {
+      settlement = { ...base, status: "failed", reason: result.error };
+      tab.delinquent = true;
+    }
+    tab.settlements.push(settlement);
+    emit(result.ok ? "settlement.completed" : "settlement.failed", settlement);
+    return settlement;
+  }
+
+  /** Human or agent ends the session: whatever is outstanding settles now. */
+  app.post("/tabs/:id/close", authTab, async (_req, res) => {
+    const tab = res.locals.tab as Tab;
+    tab.session_ended = true;
+    const settlement = await runTreasurer(tab);
+    res.json({ tab_id: tab.tab_id, session_ended: true, settlement: settlement ?? null, outstanding: store.outstanding(tab) });
+  });
+
+  /** Force a treasurer evaluation (used by the periodic exposure-window sweep). */
+  app.post("/tabs/:id/evaluate", authTab, async (_req, res) => {
+    const tab = res.locals.tab as Tab;
+    const settlement = await runTreasurer(tab);
+    res.json({ settlement: settlement ?? null, outstanding: store.outstanding(tab) });
+  });
+
+  /** The numbers for the video: per-call billing vs the tab. */
+  app.get("/tabs/:id/metrics", authTab, (_req, res) => {
+    const tab = res.locals.tab as Tab;
+    const completed = tab.settlements.filter((s) => s.status === "completed");
+    const cmp = feeComparison(tab.lines.map((l) => l.quote.price), completed.map((s) => s.amount), fees);
+    res.json({ ...cmp, blocked: tab.blocked.length, approvals: tab.lines.filter((l) => l.approved_by_human).length, delinquent: tab.delinquent, gateway: gateway.name });
+  });
+
+  /** Periodic sweep so an idle tab still settles once its exposure window passes. */
+  (app as unknown as { sweep: () => Promise<void> }).sweep = async () => {
+    for (const tab of store.tabs.values()) if (!tab.delinquent) await runTreasurer(tab);
+  };
 
   app.get("/approvals/:id", (req, res) => {
     const a = store.approvals.get(req.params.id);

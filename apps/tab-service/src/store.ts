@@ -6,10 +6,29 @@ export type Tab = {
   policy: Policy;
   lines: TabLine[];
   blocked: Array<{ at: string; quote: Quote; reason: string }>;
-  settlements: Array<{ at: string; amount: number; capture_id?: string; rationale: string }>;
+  settlements: Settlement[];
   created_at: string;
+  /** Set by POST /tabs/:id/close; the treasurer settles whatever is outstanding. */
+  session_ended: boolean;
+  last_settlement_at?: string;
+  /** A failed capture marks the tab delinquent; no further lines are accepted. */
+  delinquent: boolean;
   /** PayPal Vault v3 payment token id; set after the buyer approves. */
   vault_id?: string;
+};
+
+export type Settlement = {
+  settlement_id: string;
+  at: string;
+  amount: number;
+  lines: number;
+  status: "completed" | "failed";
+  capture_id?: string;
+  order_id?: string;
+  paypal_fee?: number;
+  reason: string;
+  rationale: string;
+  llm_adjusted: boolean;
 };
 
 export type Approval = {
@@ -36,7 +55,7 @@ export class MemoryStore {
     return round2(tab.lines.filter((l) => l.created_at.slice(0, 10) === day).reduce((s, l) => s + l.quote.price, 0));
   }
   outstanding(tab: Tab): number {
-    const settled = tab.settlements.reduce((s, x) => s + x.amount, 0);
+    const settled = tab.settlements.filter((x) => x.status === "completed").reduce((s, x) => s + x.amount, 0);
     return round2(this.spentSession(tab) - settled);
   }
   callsLastMinute(tabId: string, now: number): number {

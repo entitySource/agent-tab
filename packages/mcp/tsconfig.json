@@ -10,6 +10,9 @@
   "references": [
     {
       "path": "../client"
+    },
+    {
+      "path": "../shared"
     }
   ]
 }

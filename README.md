@@ -11,7 +11,23 @@ Built for the PayPal AI Hackathon 2026 (submission window Oct 1 - Nov 12, 2026).
 
 ## Status
 
-Day 1 scaffold. See `../AGENT-TAB-PLAN.md` for the build plan and gates.
+- M1 core protocol: done (402 -> policy -> signed receipt -> data; approvals; replay/tamper rejection).
+- M2 settlement + treasurer: done against a mock gateway; the PayPal Vault v3 gateway is wired and switches on when `PAYPAL_*` are set in `.env`.
+- MCP tool: `@agent-tab/mcp` exposes `paid_fetch` and `tab_status`.
+- Gate G1 (real sandbox capture) pending credentials. See `../AGENT-TAB-PLAN.md`.
+
+## Run the stack locally
+
+```bash
+npm run dev:tab      # tab service on :4100 (mock gateway until PAYPAL_* are set)
+npm run dev:api      # demo paid API on :4200
+```
+
+Create a tab (the human step), then point an agent or the MCP tool at it:
+
+```bash
+curl -s -X POST localhost:4100/tabs -H 'content-type: application/json' -d '{"policy":{"per_call_cap":0.3,"session_cap":5,"daily_cap":20,"merchant_allowlist":["research-data-demo"],"approval_threshold":0.2,"settlement_threshold":1,"max_calls_per_minute":60,"expires_at":"2026-12-31T00:00:00Z"}}'
+```
 
 ## Layout
 
