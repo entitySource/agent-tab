@@ -1,4 +1,5 @@
-export const TAB_SERVICE_URL = (import.meta.env.VITE_TAB_SERVICE_URL as string | undefined) ?? "http://localhost:4100";
+const rawUrl = (import.meta.env.VITE_TAB_SERVICE_URL as string | undefined) ?? "http://localhost:4100";
+export const TAB_SERVICE_URL = /^https?:\/\//.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
 
 export type Policy = {
   per_call_cap: number; session_cap: number; daily_cap: number; merchant_allowlist: string[];

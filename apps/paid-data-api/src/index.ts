@@ -4,7 +4,8 @@ import { createApp } from "./app.js";
 
 const port = Number(process.env.PAID_API_PORT ?? 4200);
 const merchantId = process.env.PAID_API_MERCHANT_ID ?? "research-data-demo";
-const tabServiceUrl = process.env.TAB_SERVICE_URL ?? "http://localhost:4100";
+const raw = process.env.TAB_SERVICE_URL ?? "http://localhost:4100";
+const tabServiceUrl = /^https?:\/\//.test(raw) ? raw : `https://${raw}`;
 
 // The seller trusts receipts signed by the tab service; fetch its public key once at boot.
 const wk = (await fetch(`${tabServiceUrl}/.well-known/agent-tab.json`).then((r) => r.json())) as { receipt_public_key_jwk: JWK };
