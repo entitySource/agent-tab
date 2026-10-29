@@ -14,11 +14,15 @@
   },
   "scripts": {
     "build": "tsc -b",
-    "dev": "tsx src/index.ts"
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js"
   },
   "dependencies": {
     "@agent-tab/client": "*",
     "ai": "^4.0.0",
-    "@ai-sdk/anthropic": "^1.0.0"
+    "@ai-sdk/anthropic": "^1.0.0",
+    "@agent-tab/shared": "*",
+    "zod": "^3.24.1",
+    "dotenv": "^16.4.7"
   }
 }

@@ -14,6 +14,8 @@ Built for the PayPal AI Hackathon 2026 (submission window Oct 1 - Nov 12, 2026).
 - M1 core protocol: done (402 -> policy -> signed receipt -> data; approvals; replay/tamper rejection).
 - M2 settlement + treasurer: done against a mock gateway; the PayPal Vault v3 gateway is wired and switches on when `PAYPAL_*` are set in `.env`.
 - MCP tool: `@agent-tab/mcp` exposes `paid_fetch` and `tab_status`.
+- M3 ledger UI: Vite + React + AG Grid + AG Charts with a live approval inbox (`npm run dev:ledger`, http://localhost:4300).
+- M4 research agent: Claude plans and pays per call through the tab (`npm run dev:agent -- "your question"`); runs scripted without an API key.
 - Gate G1 (real sandbox capture) pending credentials. See `../AGENT-TAB-PLAN.md`.
 
 ## Run the stack locally

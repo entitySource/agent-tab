@@ -13,6 +13,7 @@ export default defineConfig({
   },
   test: {
     include: ["packages/**/*.test.ts", "apps/**/*.test.ts"],
+    exclude: ["**/node_modules/**", "**/dist/**", "apps/ledger/**"],
     environment: "node",
     testTimeout: 15_000,
   },

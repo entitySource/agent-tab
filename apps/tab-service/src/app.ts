@@ -34,6 +34,14 @@ export function createApp(keys: Keys, store = new MemoryStore(), options: AppOpt
   const exposureWindowMs = options.exposureWindowMs ?? 30 * 60_000;
   const app = express();
   app.use(express.json({ limit: "64kb" }));
+  // The ledger UI runs on another origin in dev; tab tokens travel in the Authorization header.
+  app.use((req, res, next) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Headers", "authorization, content-type");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    if (req.method === "OPTIONS") { res.status(204).end(); return; }
+    next();
+  });
 
   const listeners = new Set<Response>();
   const emit = (event: string, data: unknown) => {

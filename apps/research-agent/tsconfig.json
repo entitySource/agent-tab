@@ -7,9 +7,15 @@
   "include": [
     "src"
   ],
+  "exclude": [
+    "src/**/*.test.ts"
+  ],
   "references": [
     {
       "path": "../../packages/client"
+    },
+    {
+      "path": "../../packages/shared"
     }
   ]
 }

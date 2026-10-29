@@ -2,8 +2,25 @@
   "name": "@agent-tab/ledger",
   "version": "0.1.0",
   "private": true,
-  "description": "Next.js + AG Grid ledger and approval inbox (scaffold with create-next-app on Nov 5)",
+  "type": "module",
+  "description": "Agent Tab ledger and approval inbox (Vite + React + AG Grid)",
   "scripts": {
-    "dev": "node -e \"console.log('ledger not scaffolded yet (Nov 5)')\""
+    "dev": "vite --port 4300",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "preview": "vite preview --port 4300"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "ag-grid-community": "^33.3.2",
+    "ag-grid-react": "^33.3.2",
+    "ag-charts-community": "^11.3.2",
+    "ag-charts-react": "^11.3.2"
+  },
+  "devDependencies": {
+    "vite": "^6.3.5",
+    "@vitejs/plugin-react": "^4.5.2",
+    "@types/react": "^18.3.23",
+    "@types/react-dom": "^18.3.7"
   }
 }

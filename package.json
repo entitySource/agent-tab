@@ -25,7 +25,8 @@
     "dev:api": "npm run dev -w apps/paid-data-api",
     "dev:tab": "npm run dev -w apps/tab-service",
     "dev:ledger": "npm run dev -w apps/ledger",
-    "dev:agent": "npm run dev -w apps/research-agent"
+    "dev:agent": "npm run dev -w apps/research-agent",
+    "build:ledger": "npm run build -w apps/ledger"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
