@@ -1,0 +1,29 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "packages/shared"
+    },
+    {
+      "path": "packages/client"
+    },
+    {
+      "path": "packages/server"
+    },
+    {
+      "path": "packages/mcp"
+    },
+    {
+      "path": "apps/tab-service"
+    },
+    {
+      "path": "apps/paid-data-api"
+    },
+    {
+      "path": "apps/research-agent"
+    },
+    {
+      "path": "scripts"
+    }
+  ]
+}

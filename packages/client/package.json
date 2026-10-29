@@ -1,0 +1,21 @@
+{
+  "name": "@agent-tab/client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Fetch wrapper with a fail-closed policy engine; adds paid calls to a tab",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@agent-tab/shared": "*"
+  }
+}

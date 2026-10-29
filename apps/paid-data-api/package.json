@@ -1,0 +1,27 @@
+{
+  "name": "@agent-tab/paid-data-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Demo seller: research dataset behind HTTP 402",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@agent-tab/server": "*",
+    "express": "^4.21.2",
+    "@agent-tab/shared": "*",
+    "@agent-tab/client": "*",
+    "jose": "^5.9.6",
+    "dotenv": "^16.4.7"
+  }
+}

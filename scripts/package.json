@@ -1,0 +1,8 @@
+{
+  "name": "@agent-tab/scripts",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "dotenv": "^16.4.7"
+  }
+}

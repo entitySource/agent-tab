@@ -1,0 +1,22 @@
+{
+  "name": "@agent-tab/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Schemas, policy types and receipt signing shared across Agent Tab",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "zod": "^3.24.1",
+    "jose": "^5.9.6"
+  }
+}

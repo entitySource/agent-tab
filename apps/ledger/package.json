@@ -1,0 +1,9 @@
+{
+  "name": "@agent-tab/ledger",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Next.js + AG Grid ledger and approval inbox (scaffold with create-next-app on Nov 5)",
+  "scripts": {
+    "dev": "node -e \"console.log('ledger not scaffolded yet (Nov 5)')\""
+  }
+}

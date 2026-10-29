@@ -1,0 +1,24 @@
+{
+  "name": "@agent-tab/research-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Demo buyer: answers a question using paid calls and writes a report",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@agent-tab/client": "*",
+    "ai": "^4.0.0",
+    "@ai-sdk/anthropic": "^1.0.0"
+  }
+}

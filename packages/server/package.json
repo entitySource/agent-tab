@@ -1,0 +1,23 @@
+{
+  "name": "@agent-tab/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Express middleware that returns 402 with a quote and verifies tab receipts on retry",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@agent-tab/shared": "*",
+    "express": "^4.21.2",
+    "jose": "^5.9.6"
+  }
+}
