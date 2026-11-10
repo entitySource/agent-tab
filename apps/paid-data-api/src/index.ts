@@ -44,6 +44,31 @@ async function fetchPublicKey(): Promise<JWK> {
   }
 }
 
-const key = await fetchPublicKey();
-handler.app = createApp(key, merchantId, (c) => console.log(`[paid-api] served ${c.quote_id} for $${c.price} on tab ${c.tab_id}`));
+const onUsage = (c: { quote_id: string; price: number; tab_id: string }) => console.log(`[paid-api] served ${c.quote_id} for $${c.price} on tab ${c.tab_id}`);
+let currentKeyX = "";
+function install(key: JWK) {
+  currentKeyX = String(key.x);
+  handler.app = createApp(key, merchantId, onUsage);
+}
+
+install(await fetchPublicKey());
 console.log(`[paid-api] receipt key loaded from ${tabServiceUrl}; serving paid routes`);
+
+// The tab service may restart with a different signing key (for example a host that has no
+// fixed key configured). Re-check periodically and swap in the new key, so receipts keep
+// verifying without restarting this seller. Quotes issued before the swap stay valid because
+// the quote store is shared across app instances.
+const KEY_REFRESH_MS = Number(process.env.RECEIPT_KEY_REFRESH_MS ?? 60_000);
+setInterval(async () => {
+  try {
+    const r = await fetch(`${tabServiceUrl}/.well-known/agent-tab.json`, { signal: AbortSignal.timeout(20_000) });
+    if (!r.ok) return;
+    const key = ((await r.json()) as { receipt_public_key_jwk: JWK }).receipt_public_key_jwk;
+    if (key?.x && String(key.x) !== currentKeyX) {
+      install(key);
+      console.warn("[paid-api] tab service receipt key changed; now verifying with the new key");
+    }
+  } catch {
+    /* tab service asleep or unreachable; keep the current key */
+  }
+}, KEY_REFRESH_MS).unref();
