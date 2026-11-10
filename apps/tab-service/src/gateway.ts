@@ -65,9 +65,13 @@ export class PayPalGateway implements PaymentGateway {
   ) {}
 
   static fromEnv(): PayPalGateway | null {
-    const id = process.env.PAYPAL_CLIENT_ID;
-    const secret = process.env.PAYPAL_CLIENT_SECRET;
+    // Dashboards often keep a trailing newline or wrapping quotes from a paste; PayPal then
+    // answers "invalid_client" with no hint why. Normalise before use.
+    const clean = (v: string | undefined) => (v ?? "").trim().replace(/^(['"])(.*)\1$/, "$2").trim();
+    const id = clean(process.env.PAYPAL_CLIENT_ID);
+    const secret = clean(process.env.PAYPAL_CLIENT_SECRET);
     if (!id || !secret) return null;
+    console.log(`[tab-service] PayPal client id ${id.slice(0, 10)}… (${id.length} chars), secret ${secret.length} chars`);
     return new PayPalGateway(id, secret);
   }
 
