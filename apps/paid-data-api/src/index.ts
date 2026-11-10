@@ -16,9 +16,9 @@ const tabServiceUrl = /^https?:\/\//.test(raw) ? raw : `https://${raw}`;
 // Bind the port immediately so the host's health check passes even while the tab service
 // is unreachable. Until the receipt key arrives, /health reports ready:false and every
 // other route answers 503 instead of serving unpaid data.
-let ready: RequestListener | undefined;
+const handler: { app?: RequestListener } = {};
 createServer((req, res) => {
-  if (ready) return ready(req, res);
+  if (handler.app) return handler.app(req, res);
   res.setHeader("content-type", "application/json");
   if (req.url === "/health") {
     res.end(JSON.stringify({ ok: true, ready: false, merchant_id: merchantId, waiting_for: tabServiceUrl }));
@@ -45,5 +45,5 @@ async function fetchPublicKey(): Promise<JWK> {
 }
 
 const key = await fetchPublicKey();
-ready = createApp(key, merchantId, (c) => console.log(`[paid-api] served ${c.quote_id} for $${c.price} on tab ${c.tab_id}`));
+handler.app = createApp(key, merchantId, (c) => console.log(`[paid-api] served ${c.quote_id} for $${c.price} on tab ${c.tab_id}`));
 console.log(`[paid-api] receipt key loaded from ${tabServiceUrl}; serving paid routes`);
