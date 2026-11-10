@@ -47,11 +47,10 @@ services:
         value: "10000"
       - key: PAID_API_MERCHANT_ID
         value: research-data-demo
+      # Public URL on purpose: fromService "host" gives the internal hostname, which the
+      # free plan cannot reach. Change this if your tab service has a different onrender.com URL.
       - key: TAB_SERVICE_URL
-        fromService:
-          type: web
-          name: agent-tab-service
-          property: host
+        value: https://agent-tab-service.onrender.com
 
   - type: web
     name: agent-tab-ledger
@@ -61,11 +60,9 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
+      # Baked into the browser bundle, so it must be the public URL, not an internal hostname.
       - key: VITE_TAB_SERVICE_URL
-        fromService:
-          type: web
-          name: agent-tab-service
-          property: host
+        value: https://agent-tab-service.onrender.com
     routes:
       - type: rewrite
         source: /*
