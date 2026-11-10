@@ -45,7 +45,7 @@ Claude Desktop or any agent runtime use a tab without seeing a credential.
 PayPal capture, and the fee comparison: $3.93 if billed per call versus $0.52 on the tab.
 
 **What was built during the hackathon.** Everything: protocol, policy engine, receipts, tab
-service, treasurer, PayPal gateway, MCP tool, ledger UI, research agent, 32 tests, hosting.
+service, treasurer, PayPal gateway, MCP tool, ledger UI, research agent, 48 tests including security regressions, hosting.
 
 ## Tools
 

@@ -22,14 +22,14 @@ describe("research agent (scripted mode)", () => {
       per_call_cap: 0.3, session_cap: 5, daily_cap: 20, merchant_allowlist: ["research-data-demo"],
       approval_threshold: 0.2, settlement_threshold: 1, max_calls_per_minute: 60, expires_at: new Date(Date.now() + 3_600_000).toISOString(),
     };
-    const tab = (await fetch(`${tabUrl}/tabs`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ policy }) }).then((r) => r.json())) as { tab_id: string; tab_token: string };
+    const tab = (await fetch(`${tabUrl}/tabs`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ policy }) }).then((r) => r.json())) as { tab_id: string; tab_token: string; owner_token: string };
     const auth = { authorization: `Bearer ${tab.tab_token}` };
 
     const steps: Step[] = [];
     const paidFetch = createTabClient({
       tabServiceUrl: tabUrl, tabId: tab.tab_id, tabToken: tab.tab_token, approvalPollMs: 20,
       // stand in for the human in the ledger inbox
-      onApprovalNeeded: ({ approval_id }) => void fetch(`${tabUrl}/approvals/${approval_id}/approve`, { method: "POST" }),
+      onApprovalNeeded: ({ approval_id }) => void fetch(`${tabUrl}/approvals/${approval_id}/approve`, { method: "POST", headers: { authorization: `Bearer ${tab.owner_token}` } }),
     });
     const result = await runScripted("Why does per-call billing lose money for agentic commerce?", makeTools(paidFetch, apiUrl, steps), steps);
 

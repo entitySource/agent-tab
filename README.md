@@ -70,7 +70,8 @@ npm run dev:ledger    # ledger UI     http://localhost:4300
 ```
 
 Open the ledger, click **Create tab** (defaults: $0.30 per call, $5 per session, ask above $0.20,
-settle every $1), and copy the `TAB_ID` and `TAB_TOKEN` it shows once. Then run the agent:
+settle every $1), and copy the `TAB_ID` and `TAB_TOKEN` it shows once. Those go to the agent.
+The ledger keeps a separate **owner token**: only it can approve, deny or watch the tab. Then run the agent:
 
 ```bash
 TAB_ID=tab_... TAB_TOKEN=... npm run dev:agent -- "Why does per-call billing lose money for agentic commerce?"
@@ -104,8 +105,10 @@ npm run spike:charge -- <vault_id> 1.00     # merchant-initiated capture, no buy
 npm run spike:charge -- <vault_id> 2.50     # second capture from the same vault_id = G1 passed
 ```
 
-4. Create a tab with that `vault_id` (the ledger form has a field for it, or pass `VAULT_ID`
-   to the agent). Settlements now create real sandbox orders; capture ids link to the sandbox.
+4. Put that `vault_id` in `.env` as `VAULT_IDS` (comma-separated if you have several) and restart
+   the tab service. Tabs created with "Charge the PayPal sandbox vault linked to this deployment"
+   (the agent does this by default) now settle with real sandbox orders. The tab service never
+   accepts a vault id from a client, only from this list.
 
 Raw responses from each step are appended to `.spike/log.jsonl`.
 
@@ -139,18 +142,20 @@ The seller fetches `publicKeyJwk` once from the tab service at `/.well-known/age
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/tabs` | Create a tab from a policy (+ optional `vault_id`); returns the tab token once |
+| POST | `/tabs` | Create a tab from a policy (+ `use_linked_vault`); returns the agent's `tab_token` and the human's `owner_token`, once |
 | GET | `/tabs/:id` | State: policy, spent, outstanding, lines, blocked, settlements |
 | POST | `/tabs/:id/lines` | Add a quoted call: 201 receipt, 202 approval pending, 403 denied with reason |
 | GET | `/tabs/:id/metrics` | Calls, settlements, per-call vs tab fees, saved, blocked, approvals |
 | POST | `/tabs/:id/close` | End the session; the treasurer settles whatever is outstanding |
 | POST | `/tabs/:id/evaluate` | Force a treasurer evaluation |
-| GET | `/approvals` · `/approvals/:id` | Pending approvals; poll one |
-| POST | `/approvals/:id/approve` · `/deny` | Human decision |
-| GET | `/events` | Server-sent events for the ledger |
+| GET | `/tabs/:id/approvals` | Pending approvals for this tab (owner) |
+| GET | `/approvals/:id` | Poll one approval (agent or owner of that tab) |
+| POST | `/approvals/:id/approve` · `/deny` | Human decision (owner only) |
+| GET | `/tabs/:id/events?token=` | Server-sent events for one tab (owner only) |
 | GET | `/.well-known/agent-tab.json` | Receipt public key |
 
-Tab routes take `Authorization: Bearer <tab_token>`. Sellers receive `Authorization: Tab <receipt>`.
+Tab routes take `Authorization: Bearer <token>`. The agent's `tab_token` can add lines, read and close;
+the human's `owner_token` can also approve, deny and watch events. Sellers receive `Authorization: Tab <receipt>`.
 
 ## Policy fields
 
@@ -160,21 +165,24 @@ Tab routes take `Authorization: Bearer <tab_token>`. Sellers receive `Authorizat
 ## Tests
 
 ```bash
-npm test          # 32 tests: policy engine, receipts, 402 protocol e2e, settlement, treasurer, agent
+npm test          # 48 tests: policy engine, receipts, 402 protocol e2e, settlement, treasurer, auth, agent
 npm run build     # type-check and build all Node workspaces
 npm run build:ledger
 ```
 
 Adversarial cases covered: over per-call cap, merchant not allowlisted, session cap mid-run,
-tampered receipt, replayed receipt, prompt-injected "raise my cap" (policy lives outside the LLM),
+tampered receipt, replayed receipt, a cheap route's receipt used on an expensive route, concurrent
+lines racing to settle, approving without the owner token, a double-clicked approval, reading another
+tab's events, an unlisted vault id, prompt-injected "raise my cap" (policy lives outside the LLM),
 LLM asking to skip a due settlement, declined capture → tab delinquent → further lines blocked.
 
 ## Deploy (Render)
 
 `render.yaml` is a Blueprint for three services: the tab service, the demo seller, and the static
 ledger. In Render: *New + → Blueprint*, select the repo, then set the `sync: false` secrets
-(`PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, optional `ANTHROPIC_API_KEY`, and a fixed
-`RECEIPT_*_JWK` pair so receipts survive restarts). Generate a keypair with:
+(`PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `VAULT_IDS`, optional `ANTHROPIC_API_KEY`, and a fixed
+`RECEIPT_*_JWK` pair so receipts survive restarts). Free services sleep when idle; the first request
+after that takes about a minute, and in-memory tabs are cleared. Generate a keypair with:
 
 ```bash
 node -e "const j=require('jose');j.generateKeyPair('EdDSA',{crv:'Ed25519',extractable:true}).then(async k=>{console.log('RECEIPT_PRIVATE_KEY_JWK='+JSON.stringify(await j.exportJWK(k.privateKey)));console.log('RECEIPT_PUBLIC_KEY_JWK='+JSON.stringify(await j.exportJWK(k.publicKey)))})"

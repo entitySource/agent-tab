@@ -32,9 +32,12 @@ export class MockGateway implements PaymentGateway {
   readonly name = "mock";
   calls: CaptureRequest[] = [];
   failNext = 0;
+  /** Simulated network latency, used to expose races in tests. */
+  delayMs = 0;
   constructor(private fee = (amount: number) => Math.round((0.49 + 0.0349 * amount) * 100) / 100) {}
   async capture(req: CaptureRequest): Promise<CaptureResult> {
     this.calls.push(req);
+    if (this.delayMs > 0) await new Promise((r) => setTimeout(r, this.delayMs));
     if (this.failNext > 0) {
       this.failNext--;
       return { ok: false, error: "INSTRUMENT_DECLINED" };

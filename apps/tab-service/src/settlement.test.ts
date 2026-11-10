@@ -85,4 +85,25 @@ describe("settlement (Gate G3 shape)", () => {
     expect(closed.settlement).toBeNull();
     expect((await tab.line(0.05)).status).toBe(403);
   });
+
+  it("fix 2: concurrent lines never settle the same balance twice", async () => {
+    const tab = await openTab(0.1);
+    const before = gateway.calls.length;
+    gateway.delayMs = 40; // a slow PayPal makes the race window wide
+    try {
+      const results = await Promise.all(Array.from({ length: 20 }, () => tab.line(0.1)));
+      expect(results.every((r) => r.status === 201)).toBe(true);
+      const s = await tab.state();
+      const done = s.settlements.filter((x) => x.status === "completed");
+      const settled = Math.round(done.reduce((a, x) => a + x.amount, 0) * 100) / 100;
+      expect(settled).toBe(2); // 20 x $0.10, captured exactly once in total
+      expect(s.outstanding).toBe(0);
+      expect(done.every((x) => x.amount > 0)).toBe(true);
+      expect(gateway.calls.length - before).toBe(done.length);
+      const refs = gateway.calls.slice(before).map((c) => c.reference);
+      expect(new Set(refs).size).toBe(refs.length); // every PayPal request id is unique
+    } finally {
+      gateway.delayMs = 0;
+    }
+  });
 });

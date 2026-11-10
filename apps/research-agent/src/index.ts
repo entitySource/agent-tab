@@ -21,15 +21,21 @@ const DEMO_POLICY = {
   expires_at: new Date(Date.now() + 24 * 3_600_000).toISOString(),
 };
 
-async function ensureTab(): Promise<{ tab_id: string; tab_token: string; created: boolean }> {
+async function ensureTab(): Promise<{ tab_id: string; tab_token: string; owner_token?: string; created: boolean }> {
   if (process.env.TAB_ID && process.env.TAB_TOKEN) return { tab_id: process.env.TAB_ID, tab_token: process.env.TAB_TOKEN, created: false };
-  const r = await fetch(`${tabServiceUrl}/tabs`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ policy: DEMO_POLICY, vault_id: process.env.VAULT_ID }) });
+  // No tab given: open one with the demo policy, charging the vault the tab service has linked (if any).
+  const r = await fetch(`${tabServiceUrl}/tabs`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ policy: DEMO_POLICY, use_linked_vault: true }) });
   if (!r.ok) throw new Error(`could not create tab: ${r.status} ${await r.text()}`);
-  const t = (await r.json()) as { tab_id: string; tab_token: string };
+  const t = (await r.json()) as { tab_id: string; tab_token: string; owner_token: string };
   return { ...t, created: true };
 }
 
 const tab = await ensureTab();
+if (tab.owner_token) {
+  console.log(`[agent] approvals for this tab need its owner token. In the ledger choose "Open an existing tab" with:`);
+  console.log(`[agent]   tab id      ${tab.tab_id}`);
+  console.log(`[agent]   owner token ${tab.owner_token}`);
+}
 const auth = { authorization: `Bearer ${tab.tab_token}` };
 console.log(`[agent] tab ${tab.tab_id}${tab.created ? " (created with demo policy)" : ""}`);
 console.log(`[agent] mode: ${useModel ? `model ${model}` : "scripted (no ANTHROPIC_API_KEY)"}`);

@@ -24,7 +24,7 @@ afterAll(() => { tabServer.close(); sellerServer.close(); });
 async function openTab(policy: Record<string, unknown>) {
   const r = await fetch(`${tabUrl}/tabs`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ policy }) });
   expect(r.status).toBe(201);
-  return (await r.json()) as { tab_id: string; tab_token: string };
+  return (await r.json()) as { tab_id: string; tab_token: string; owner_token: string };
 }
 const tabState = (tab: { tab_id: string; tab_token: string }) =>
   fetch(`${tabUrl}/tabs/${tab.tab_id}`, { headers: { authorization: `Bearer ${tab.tab_token}` } }).then((r) => r.json()) as Promise<{ spent_session: number; lines: unknown[]; blocked: Array<{ reason: string }> }>;
@@ -105,11 +105,37 @@ describe("402 -> tab -> receipt -> data", () => {
     const pending = paidFetch(`${sellerUrl}/v1/summary/merchant-pain`);
     for (let i = 0; i < 100 && !approvalId; i++) await new Promise((r) => setTimeout(r, 10));
     expect(approvalId).not.toBe("");
-    const ok = await fetch(`${tabUrl}/approvals/${approvalId}/approve`, { method: "POST" });
+    const ok = await fetch(`${tabUrl}/approvals/${approvalId}/approve`, { method: "POST", headers: { authorization: `Bearer ${tab.owner_token}` } });
     expect(ok.status).toBe(200);
     const res = await pending;
     expect(res.status).toBe(200);
     const body = (await res.json()) as { count: number };
     expect(body.count).toBe(3);
+  });
+
+  it("fix 1: a receipt bought for a cheap route cannot unlock an expensive one", async () => {
+    const tab = await openTab({ ...basePolicy, approval_threshold: 1 });
+    const h = { authorization: `Bearer ${tab.tab_token}`, "content-type": "application/json" };
+    const cheap = ((await (await fetch(`${sellerUrl}/v1/search?q=fee`)).json()) as { quote: unknown }).quote;
+    const line = (await fetch(`${tabUrl}/tabs/${tab.tab_id}/lines`, { method: "POST", headers: h, body: JSON.stringify({ quote: cheap }) }).then((r) => r.json())) as { receipt: string };
+    const receipt = { authorization: `Tab ${line.receipt}` };
+
+    const expensive = await fetch(`${sellerUrl}/v1/export`, { headers: receipt });
+    expect(expensive.status).toBe(403);
+    expect(((await expensive.json()) as { error: string }).error).toBe("wrong_resource");
+    const sibling = await fetch(`${sellerUrl}/v1/docs/d1`, { headers: receipt });
+    expect(sibling.status).toBe(403);
+    // The receipt still works where it was bought, exactly once.
+    expect((await fetch(`${sellerUrl}/v1/search?q=fee`, { headers: receipt })).status).toBe(200);
+    expect((await fetch(`${sellerUrl}/v1/search?q=fee`, { headers: receipt })).status).toBe(403);
+  });
+
+  it("fix 1: a quote is bound to its exact URL, query string included", async () => {
+    const tab = await openTab({ ...basePolicy, approval_threshold: 1 });
+    const h = { authorization: `Bearer ${tab.tab_token}`, "content-type": "application/json" };
+    const quote = ((await (await fetch(`${sellerUrl}/v1/search?q=fee`)).json()) as { quote: unknown }).quote;
+    const line = (await fetch(`${tabUrl}/tabs/${tab.tab_id}/lines`, { method: "POST", headers: h, body: JSON.stringify({ quote }) }).then((r) => r.json())) as { receipt: string };
+    const other = await fetch(`${sellerUrl}/v1/search?q=everything`, { headers: { authorization: `Tab ${line.receipt}` } });
+    expect(other.status).toBe(403);
   });
 });

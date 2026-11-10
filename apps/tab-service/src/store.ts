@@ -2,7 +2,10 @@ import type { Policy, Quote, TabLine } from "@agent-tab/shared";
 
 export type Tab = {
   tab_id: string;
+  /** Given to the agent: can add lines, read the tab, close the session. */
   tab_token: string;
+  /** Kept by the human: the only credential that can approve, deny, or watch events. */
+  owner_token: string;
   policy: Policy;
   lines: TabLine[];
   blocked: Array<{ at: string; quote: Quote; reason: string }>;
@@ -41,7 +44,7 @@ export type Approval = {
   created_at: string;
 };
 
-/** In-memory store for M1. Swap for Prisma on Nov 2 without changing the routes. */
+/** In-memory store. A database-backed store can replace it without changing the routes. */
 export class MemoryStore {
   tabs = new Map<string, Tab>();
   approvals = new Map<string, Approval>();

@@ -55,10 +55,26 @@
 
 | Holder | Has | Does not have |
 |---|---|---|
-| Human | Policy, PayPal login, approval inbox | Nothing to do per call |
+| Human | Policy, owner token (approve, deny, watch events), PayPal login | Nothing to do per call |
 | Agent | Tab token, short-lived receipts | Vault id, PayPal credentials, policy write access |
 | Seller | Tab service public key | Buyer identity, payment method |
-| Tab service | Vault id, PayPal client credentials, private key | The agent's prompts or tools |
+| Tab service | Vault ids from the operator's allowlist, PayPal client credentials, private key | The agent's prompts or tools |
+
+## Hardening (Nov 10)
+
+- **Quotes are bound to route and price.** A receipt is accepted only on the exact URL it was quoted
+  for, and only if the receipt's price, the quote's price and the route's configured price all match.
+  Before this, a receipt bought for a $0.05 route could unlock a $9 route on the same seller.
+- **Settlements are serialised per tab.** Treasurer runs for one tab form a queue; each run re-reads
+  the outstanding balance after the previous settlement is recorded. Concurrent lines can no longer
+  capture the same balance twice, and every PayPal request id is unique.
+- **Two credentials per tab.** The agent's `tab_token` cannot approve, deny or watch. The human's
+  `owner_token` can. Events are streamed per tab to the owner only. Tokens are compared in constant time.
+- **Vaults come only from the operator.** `VAULT_IDS` lists the vaults a deployment may charge; a
+  client can opt in with `use_linked_vault` but can never name an arbitrary vault id.
+- **Replay memory is bounded.** Seen receipt nonces are dropped once the receipt has expired (after
+  which the signature check rejects it anyway), with a hard cap as a backstop. Outstanding quotes are
+  capped the same way so unauthenticated 402 traffic cannot exhaust memory.
 
 ## Fee model
 

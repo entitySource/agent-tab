@@ -8,15 +8,16 @@ import { createApp, loadOrCreateKeys } from "./app.js";
 import { MockGateway, PayPalGateway } from "./gateway.js";
 import { createAnthropicAdvisor } from "./advisor.js";
 
-const port = Number(process.env.TAB_SERVICE_PORT ?? 4100);
+const port = Number(process.env.PORT ?? process.env.TAB_SERVICE_PORT ?? 4100);
+const allowedVaultIds = (process.env.VAULT_IDS ?? process.env.VAULT_ID ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 const keys = await loadOrCreateKeys();
 const gateway = PayPalGateway.fromEnv() ?? new MockGateway();
 const advisor = await createAnthropicAdvisor();
 
-const app = createApp(keys, undefined, { gateway, advisor });
-app.listen(port, () => {
+const app = createApp(keys, undefined, { gateway, advisor, allowedVaultIds });
+app.listen(port, "0.0.0.0", () => {
   console.log(`[tab-service] listening on http://localhost:${port}`);
-  console.log(`[tab-service] gateway=${gateway.name} advisor=${advisor ? "anthropic" : "template"}`);
+  console.log(`[tab-service] gateway=${gateway.name} advisor=${advisor ? "anthropic" : "template"} linked_vaults=${allowedVaultIds.length}`);
   console.log(`[tab-service] public key at /.well-known/agent-tab.json`);
 });
 

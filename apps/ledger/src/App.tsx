@@ -4,7 +4,7 @@ import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, themeQuartz, type ColDef } from "ag-grid-community";
 import { AgCharts } from "ag-charts-react";
 import type { AgChartOptions } from "ag-charts-community";
-import { api, loadCreds, saveCreds, type Approval, type Blocked, type Creds, type Line, type Metrics, type Policy, type Settlement, type TabState } from "./api";
+import { api, loadCreds, saveCreds, type Approval, type Blocked, type CreatedTab, type Creds, type Line, type Metrics, type Policy, type Settlement, type TabState } from "./api";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -32,15 +32,15 @@ export function App() {
   const refresh = useCallback(async () => {
     if (!creds) return;
     try {
-      const [s, m, a] = await Promise.all([api.getTab(creds), api.getMetrics(creds), api.listApprovals()]);
-      setState(s); setMetrics(m); setApprovals(a.filter((x) => x.tab_id === creds.tab_id)); setError(null);
+      const [s, m, a] = await Promise.all([api.getTab(creds), api.getMetrics(creds), api.listApprovals(creds)]);
+      setState(s); setMetrics(m); setApprovals(a); setError(null);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }, [creds]);
 
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
     if (!creds) return;
-    const stop = api.events((name, data) => {
+    const stop = api.events(creds, (name, data) => {
       const d = data as { tab_id?: string; reason?: string; rationale?: string; amount?: number; capture_id?: string; quote?: { price: number } };
       if (d.tab_id && d.tab_id !== creds.tab_id) return;
       const text =
@@ -63,7 +63,7 @@ export function App() {
       <header>
         <div>
           <h1>Agent Tab <span className="muted">ledger</span></h1>
-          <div className="muted mono">{creds.tab_id} · gateway {metrics?.gateway ?? "…"} {state?.vault_linked ? "· vault linked" : "· no vault"} {state?.delinquent && <b className="bad">· DELINQUENT</b>} {state?.session_ended && "· session ended"}</div>
+          <div className="muted mono">{creds.tab_id} · gateway {metrics?.gateway ?? "…"} {state?.vault_linked ? "· PayPal vault linked" : "· no vault"} {state?.delinquent && <b className="bad">· DELINQUENT</b>} {state?.session_ended && "· session ended"}</div>
         </div>
         <div className="actions">
           <button onClick={() => void api.closeTab(creds).then(refresh)} disabled={state?.session_ended}>Close session &amp; settle</button>
@@ -87,8 +87,8 @@ export function App() {
               <div className="approval" key={a.approval_id}>
                 <div><b>{usd(a.quote.price)}</b> <span className="mono muted">{a.quote.resource}</span><div className="muted small">{a.quote.merchant_id} · {time(a.created_at)}</div></div>
                 <div className="actions">
-                  <button onClick={() => void api.decide(a.approval_id, "approve").then(refresh)}>Approve</button>
-                  <button className="ghost" onClick={() => void api.decide(a.approval_id, "deny").then(refresh)}>Deny</button>
+                  <button onClick={() => void api.decide(creds, a.approval_id, "approve").then(refresh)}>Approve</button>
+                  <button className="ghost" onClick={() => void api.decide(creds, a.approval_id, "deny").then(refresh)}>Deny</button>
                 </div>
               </div>
             ))}
@@ -162,17 +162,19 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
 
 function Connect({ onConnect }: { onConnect: (c: Creds) => void }) {
   const [policy, setPolicy] = useState<Policy>(DEFAULT_POLICY);
-  const [vaultId, setVaultId] = useState("");
-  const [existing, setExisting] = useState<Creds>({ tab_id: "", tab_token: "" });
-  const [issued, setIssued] = useState<Creds | null>(null);
+  const [useVault, setUseVault] = useState(true);
+  const [existing, setExisting] = useState<Creds>({ tab_id: "", owner_token: "" });
+  const [issued, setIssued] = useState<CreatedTab | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const num = (k: keyof Policy) => ({ type: "number", step: "0.01", value: String(policy[k]), onChange: (e: ChangeEvent<HTMLInputElement>) => setPolicy({ ...policy, [k]: Number(e.target.value) }) });
 
   if (issued) return (
     <div className="shell narrow"><h1>Tab created</h1>
-      <p>Give these to your agent (or the MCP tool) as <code>TAB_ID</code> and <code>TAB_TOKEN</code>. The token is shown once.</p>
+      <p>Give these two lines to your agent (or the MCP tool). The agent's token can add calls to the tab but cannot approve them or change the limits.</p>
       <pre className="mono">TAB_ID={issued.tab_id}{"\n"}TAB_TOKEN={issued.tab_token}</pre>
-      <button onClick={() => onConnect(issued)}>Open ledger</button>
+      <p className="muted small">This ledger keeps the separate owner token, which is the only credential that can approve, deny, or watch this tab. Copy it if you want to reopen the ledger elsewhere: <span className="mono">{issued.owner_token}</span></p>
+      <p className="muted small">{issued.vault_linked ? "Settlements will charge the linked PayPal sandbox vault." : "No PayPal vault is linked; settlements use the mock gateway or will fail on PayPal."}</p>
+      <button onClick={() => onConnect({ tab_id: issued.tab_id, owner_token: issued.owner_token })}>Open ledger</button>
     </div>
   );
   return (
@@ -189,16 +191,16 @@ function Connect({ onConnect }: { onConnect: (c: Creds) => void }) {
           <label>Settle every <input {...num("settlement_threshold")} /></label>
           <label>Max calls / min <input {...num("max_calls_per_minute")} /></label>
           <label className="wide">Allowed merchants <input value={policy.merchant_allowlist.join(", ")} onChange={(e) => setPolicy({ ...policy, merchant_allowlist: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} /></label>
-          <label className="wide">PayPal vault id (optional until Gate G1) <input value={vaultId} onChange={(e) => setVaultId(e.target.value)} placeholder="from scripts/vault-spike.ts token" /></label>
+          <label className="wide check"><input type="checkbox" checked={useVault} onChange={(e) => setUseVault(e.target.checked)} /> Charge the PayPal sandbox vault linked to this deployment</label>
         </div>
-        <button onClick={() => void api.createTab(policy, vaultId || undefined).then((c) => setIssued({ tab_id: c.tab_id, tab_token: c.tab_token })).catch((e) => setErr(String(e)))}>Create tab</button>
+        <button onClick={() => void api.createTab(policy, useVault).then(setIssued).catch((e) => setErr(String(e)))}>Create tab</button>
       </div>
       <div className="panel"><h2>Or open an existing tab</h2>
         <div className="form">
-          <label className="wide">Tab id <input value={existing.tab_id} onChange={(e) => setExisting({ ...existing, tab_id: e.target.value })} /></label>
-          <label className="wide">Tab token <input value={existing.tab_token} onChange={(e) => setExisting({ ...existing, tab_token: e.target.value })} /></label>
+          <label className="wide">Tab id <input value={existing.tab_id} onChange={(e) => setExisting({ ...existing, tab_id: e.target.value.trim() })} /></label>
+          <label className="wide">Owner token <input value={existing.owner_token} onChange={(e) => setExisting({ ...existing, owner_token: e.target.value.trim() })} /></label>
         </div>
-        <button className="ghost" disabled={!existing.tab_id || !existing.tab_token} onClick={() => onConnect(existing)}>Open ledger</button>
+        <button className="ghost" disabled={!existing.tab_id || !existing.owner_token} onClick={() => onConnect(existing)}>Open ledger</button>
       </div>
     </div>
   );

@@ -32,3 +32,5 @@ pre { background: #0b0f18; border: 1px solid var(--line); border-radius: 8px; pa
 .feed li:first-child { border-top: 0; }
 .tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: #1b2335; color: var(--muted); margin: 0 4px; }
 .tag.line { color: var(--accent); } .tag.settlement { color: var(--ok); } .tag.approval { color: #ffd166; } .tag.treasurer { color: #c3a6ff; }
+.form label.check { display: flex; align-items: center; gap: 8px; color: var(--fg); font-size: 13px; }
+.form label.check input { width: auto; }
